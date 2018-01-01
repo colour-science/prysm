@@ -1266,6 +1266,24 @@ def xy_to_XYZ(xy):
     return xyY_to_XYZ(xyY)
 
 
+def xy_to_uvprime(xy):
+    ''' Computes u'v' chromaticity coordinates from xy chromaticity coordinates.
+
+    Args:
+        xy (`iterable`): x, y chromaticity coordinates.
+
+    Returns:
+        `numpy.ndarray` with last dimension corresponding to u', v'.
+
+    '''
+    xy = np.asarray(xy)
+    x, y = xy[..., 0], xy[..., 1]
+    u = 4 * x / (-2 * x + 12 * y + 3)
+    v = 6 * y / (-2 * x + 12 * y + 3) * 1.5  # inline conversion from v -> v'
+    shape = xy.shape
+    return np.stack((u, v), axis=len(shape))
+
+
 def xy_to_CCT(xy):
     ''' Computes the correlated color temperature given x,y chromaticity coordinates.
 
