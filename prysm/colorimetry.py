@@ -1077,14 +1077,10 @@ def xyY_to_xy(xyY):
 
     '''
     xyY = np.asarray(xyY)
-    shape = xyY.shape
-    if shape[-1] is 2:
-        return xyY
-    else:
-        x, y = xyY[..., 0], xyY[..., 1]
+    x, y = xyY[..., 0], xyY[..., 1]
 
-        shape = x.shape
-        return np.stack((x, y), axis=len(shape))
+    shape = x.shape
+    return np.stack((x, y), axis=len(shape))
 
 
 def xyY_to_XYZ(xyY):
