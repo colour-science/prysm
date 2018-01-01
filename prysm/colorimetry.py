@@ -17,7 +17,7 @@ from matplotlib.collections import LineCollection
 
 from prysm.conf import config
 from prysm.util import share_fig_ax, colorline, smooth
-from prysm.mathops import atan2, pi, cos, sin, exp, sqrt, arccos, jit
+from prysm.mathops import atan, atan2, pi, cos, sin, exp, log, sqrt, arccos, jit
 
 # some CIE constants
 CIE_K = 24389 / 27
@@ -1347,7 +1347,7 @@ def uvprime_to_xy(uvprime):
     return np.stack((x, y), axis=len(shape))
 
 
-def uvprime_to_CCT(uvprime):
+def uvprime_to_CCT_DUV(uvprime):
     ''' Computes CCT from u'v' coordinates.
 
     Args:
@@ -1356,53 +1356,54 @@ def uvprime_to_CCT(uvprime):
     Returns:
         `float`: CCT.
 
-    '''
-    uv = np.asarray(uvprime)
-    xy = uvprime_to_xy(uv)
-    return xy_to_CCT(xy)
-
-
-def uvprime_to_Duv(uvprime):
-    ''' Computes Duv from u'v' coordiantes.
-
-    Args:
-        uv (`numpy.ndarray`): array with last dimensions corresponding to u, v
-
-    Returns:
-        `float`: CCT.
-
     Notes:
         see "Calculation of CCT and Duv and Practical Conversion Formulae", Yoshi Ohno
         http://www.cormusa.org/uploads/CORM_2011_Calculation_of_CCT_and_Duv_and_Practical_Conversion_Formulae.PDF
-    '''
-    k0, k1, k2, k3 = NIST_DUV_k0, NIST_DUV_k1, NIST_DUV_k2, NIST_DUV_k3
-    k4, k5, k6 = NIST_DUV_k4, NIST_DUV_k5, NIST_DUV_k6
 
-    uv = np.asarray(uvprime)
-    u, v = uv[..., 0], uv[..., 1] / 1.5  # inline convert v' to v
+    '''
+    uvp = np.asarray(uvprime)
+    u, v = uvp[..., 0], uvp[..., 1] / 1.5  # inline conversion from v' -> v
     L_FP = sqrt((u - 0.292) ** 2 + (v - 0.24) ** 2)
-    a = arccos((u - 0.292) / L_FP)
-    L_BB = k6 * a ** 6 + k5 * a ** 5 + k4 * a ** 4 + k3 * a ** 3 + k2 * a ** 2 + k1 * a + k0
-    return L_FP - L_BB
+    a1 = atan((v - 0.24) / (u - 0.292))
+    k = NIST_CCT_MATRIX
 
+    if a1 >= 0:
+        a = a1
+    else:
+        a = a1 + pi
 
-def uvprime_to_CCT_Duv(uvprime):
-    ''' Computes CCT and Duv from u'v' coordiantes.
+    L_BB = (k[0, 6] * a ** 6 + k[0, 5] * a ** 5 + k[0, 4] * a ** 4 +
+            k[0, 3] * a ** 3 + k[0, 2] * a ** 2 + k[0, 1] * a + k[0, 0])
 
-    Args:
-        uv (`numpy.ndarray`): array with last dimensions corresponding to u, v
+    Duv = L_FP - L_BB
 
-    Returns:
-        `float`: CCT.
+    if a < 2.54:
+        row1, row2 = 1, 3
+    else:
+        row1, row2 = 2, 4
 
-    Notes:
-        see "Calculation of CCT and Duv and Practical Conversion Formulae", Yoshi Ohno
-        http://www.cormusa.org/uploads/CORM_2011_Calculation_of_CCT_and_Duv_and_Practical_Conversion_Formulae.PDF
+    T1 = (k[row1, 6] * a ** 6 + k[row1, 5] * a ** 5 + k[row1, 4] * a ** 4 +
+          k[row1, 3] * a ** 3 + k[row1, 2] * a ** 2 + k[row1, 1] * a + k[row1, 0])
+    Dtc1 = ((k[row2, 6] * a ** 6 + k[row2, 5] * a ** 5 + k[row2, 4] * a ** 4 +
+             k[row2, 3] * a ** row2 + k[row2, 2] * a ** 2 + k[row2, 1] * a + k[row2, 0]) *
+            (L_BB + 0.01) / L_FP * Duv / 0.01)
 
-    '''
-    duv = uvprime_to_Duv(uvprime)
-    cct = uvprime_to_CCT(uvprime)
-    return cct, duv
+    T2 = T1 - Dtc1
+    c = log(T2)
+
+    if Duv >= 0:
+        row3 = 5
+    else:
+        row3 = 6
+
+    Dtc2 = (k[row3, 6] * c ** 6 + k[row3, 5] * c ** row3 + k[row3, 4] * c ** 4 +
+            k[row3, 3] * c ** 3 + k[row3, 2] * c ** 2 + k[row3, 1] * c + k[row3, 0])
+
+    if Duv < 0:
+        Dtc2 *= abs(Duv / 0.03) ** 2
+
+    CCT = T2 - Dtc2
+    return CCT, Duv
 
 
 def CCT_Duv_to_uvprime(CCT, Duv, delta_t=0.01):
