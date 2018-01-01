@@ -1137,13 +1137,11 @@ def xy_to_xyY(xy, Y=1):
     '''
     xy = np.asarray(xy)
     shape = xy.shape
-    if shape[-1] is 3:
-        return xy
-    else:
-        x, y = xy[..., 0], xy[..., 1]
-        Y = np.ones(x.shape) * Y
 
-        return np.stack((x, y, Y), axis=len(shape) - 1)
+    x, y = xy[..., 0], xy[..., 1]
+    Y = np.ones(x.shape) * Y
+
+    return np.stack((x, y, Y), axis=len(shape) - 1)
 
 
 def xy_to_XYZ(xy):
