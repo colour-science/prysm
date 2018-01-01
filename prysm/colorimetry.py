@@ -353,7 +353,7 @@ def normalize_spectrum(spectrum, to='peak vis'):
     if to.lower() == 'peak vis':
         low, high = np.searchsorted(wvl, 400), np.searchsorted(wvl, 700)
         vals2 = vals / vals[low:high].max()
-    elif to.lower() == 'peak 560':
+    elif to.lower() in ('peak 560', '560', '560nm'):
         idx = np.searchsorted(wvl, 560)
         vals2 = vals / vals[idx]
     return {
@@ -985,11 +985,8 @@ def XYZ_to_xyY(XYZ, assume_nozeros=True, ref_white='D65'):
 
             `numpy.ndarray`: Y coordinates.
 
-    Notes:
-        zero_ref_illuminant is unimplemented, forced to D65 at the time being.
-
     '''
-
+    XYZ = np.asarray(XYZ)
     X, Y, Z = XYZ[..., 0], XYZ[..., 1], XYZ[..., 2]
 
     if not assume_nozeros:
