@@ -973,7 +973,7 @@ def XYZ_to_xyY(XYZ, assume_nozeros=True, ref_white='D65'):
             will run faster as `True`, if `False` will correct for all-zero
             values.
 
-        ref_white (`str): string for reference illuminant in the case
+        ref_white (`str): string for reference illuminant used in the case
             where X==Y==Z==0.
 
     Returns:
@@ -985,14 +985,18 @@ def XYZ_to_xyY(XYZ, assume_nozeros=True, ref_white='D65'):
 
             `numpy.ndarray`: Y coordinates.
 
+    Notes:
+        If X==Y==Z==0 and assume_nozeros is False, will return the chromaticity coordinates
+        of the reference white.
+
     '''
     XYZ = np.asarray(XYZ)
     X, Y, Z = XYZ[..., 0], XYZ[..., 1], XYZ[..., 2]
 
     if not assume_nozeros:
-        zero_X = np.where(X == 0)
-        zero_Y = np.where(Y == 0)
-        zero_Z = np.where(Z == 0)
+        zero_X = X == 0
+        zero_Y = Y == 0
+        zero_Z = Z == 0
         allzeros = np.all(np.dstack((zero_X, zero_Y, zero_Z)))
         X[allzeros] = 0.3
         Y[allzeros] = 0.3
@@ -1009,6 +1013,7 @@ def XYZ_to_xyY(XYZ, assume_nozeros=True, ref_white='D65'):
         xr, yr = XYZ_to_xy(xyz)
         x[allzeros] = xr
         y[allzeros] = yr
+        Y[:] = xyz[1]
 
     return np.stack((x, y, Y), axis=len(shape))
 
