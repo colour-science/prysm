@@ -16,17 +16,18 @@ from numpy import (
     sin,
     cos,
     tan,
+    arctan,
     arctan2,
     sinc,
     exp,
     log,
     arccos,
     arcsin,
-    arctan,
 )
 from numpy.fft import fftshift, ifftshift
 
 atan2 = arctan2
+atan = arctan
 
 # numba funcs, cuda
 try:
