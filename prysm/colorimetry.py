@@ -1324,7 +1324,7 @@ def spectrum_to_CCT_Duv(spectrum_dict):
     upvp = XYZ_to_uvprime(XYZ)
     CCT = uvprime_to_CCT(upvp)
     Duv = uvprime_to_Duv(upvp)
-    return (CCT, Duv)
+    return CCT, Duv
 
 
 def XYZ_to_AdobeRGB(XYZ, illuminant='D65'):
