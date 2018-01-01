@@ -936,6 +936,23 @@ def spectrum_to_XYZ_nonemissive(spectrum_dict, illuminant='D65', cmf='1931_2deg'
     return X, Y, Z
 
 
+def spectrum_to_CCT_Duv(spectrum_dict):
+    ''' Computes the CCT and Duv values of a spectrum object.
+
+    Args:
+        spectrum_dict (`dict`): dictionary with keys wvl, values.
+
+    Returns:
+        `tuple` containing (CCT, Duv)
+
+    '''
+    XYZ = spectrum_to_XYZ_nonemissive(spectrum_dict)
+    upvp = XYZ_to_uvprime(XYZ)
+    CCT = uvprime_to_CCT(upvp)
+    Duv = uvprime_to_Duv(upvp)
+    return CCT, Duv
+
+
 def wavelength_to_XYZ(wavelength, observer='1931_2deg'):
     ''' Uses tristimulus color matching functions to map a awvelength to XYZ
         coordinates.
@@ -1308,23 +1325,6 @@ def CCT_Duv_to_uvprime(CCT, Duv, delta_t=0.01):
     u = u0 + Duv * dv / sqrt(du**2 + dv**2)
     v = u0 + Duv * du / sqrt(du**2 + dv**2)
     return u, v * 1.5**2  # factor of 1.5 converts v -> v'
-
-
-def spectrum_to_CCT_Duv(spectrum_dict):
-    ''' Computes the CCT and Duv values of a spectrum object.
-
-    Args:
-        spectrum_dict (`dict`): dictionary with keys wvl, values.
-
-    Returns:
-        `tuple` containing (CCT, Duv)
-
-    '''
-    XYZ = spectrum_to_XYZ_nonemissive(spectrum_dict)
-    upvp = XYZ_to_uvprime(XYZ)
-    CCT = uvprime_to_CCT(upvp)
-    Duv = uvprime_to_Duv(upvp)
-    return CCT, Duv
 
 
 def XYZ_to_AdobeRGB(XYZ, illuminant='D65'):
