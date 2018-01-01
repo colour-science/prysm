@@ -936,17 +936,100 @@ def spectrum_to_XYZ_nonemissive(spectrum_dict, illuminant='D65', cmf='1931_2deg'
     return X, Y, Z
 
 
-def spectrum_to_CCT_Duv(spectrum_dict):
+def _spectrum_to_coordinates(spectrum_dict, out_function, emissive=False, nonemissive_illuminant='D65'):
+    ''' Computes the coordinates defined by out_function from a given spectrum dictionary.
+
+    Args:
+        spectrum_dict (`dict`): dictionary with keys wvl, values.
+
+        out_function (`function`): an XYZ_to_something function.  More generally, a function
+            which takes XYZ tristimulus values and returns color coordinates.
+
+        emissive (`boolean`): whether the spectrum is an emissive or nonemissive one.
+
+        nonemissive_illuminant (`str`): reference illuminant for non-emissive spectra.
+
+    Returns:
+        `numpy.ndarray` with last dimension x, y, Y
+    '''
+    if not emissive:
+        XYZ = spectrum_to_XYZ_nonemissive(spectrum_dict, illuminant=nonemissive_illuminant)
+    else:
+        XYZ = spectrum_to_XYZ_emissive(spectrum_dict)
+
+    return out_function(XYZ)
+
+
+def spectrum_to_xyY(spectrum_dict, emissive=False, nonemissive_illuminant='D65'):
+    ''' Computes the xyY chromaticity values of a spectrum object.
+
+    Args:
+        spectrum_dict (`dict`): dictionary with keys wvl, values.
+
+        emissive (`boolean`): whether the spectrum is an emissive or nonemissive one.
+
+        nonemissive_illuminant (`str`): reference illuminant for non-emissive spectra.
+
+    Returns:
+        `numpy.ndarray` with last dimension x, y, Y
+
+    '''
+    return _spectrum_to_coordinates(spectrum_dict, XYZ_to_xyY, emissive, nonemissive_illuminant)
+
+
+def spectrum_to_xy(spectrum_dict, emissive=False, nonemissive_illuminant='D65'):
+    ''' Computes the xy chromaticity values of a spectrum object.
+
+    Args:
+        spectrum_dict (`dict`): dictionary with keys wvl, values.
+
+        emissive (`boolean`): whether the spectrum is an emissive or nonemissive one.
+
+        nonemissive_illuminant (`str`): reference illuminant for non-emissive spectra.
+
+    Returns:
+        `numpy.ndarray` with last dimension x, y,
+
+    '''
+    return _spectrum_to_coordinates(spectrum_dict, XYZ_to_xy, emissive, nonemissive_illuminant)
+
+
+def spectrum_to_uvprime(spectrum_dict, emissive=False, nonemissive_illuminant='D65'):
+    ''' Computes the xy chromaticity values of a spectrum object.
+
+    Args:
+        spectrum_dict (`dict`): dictionary with keys wvl, values.
+
+        emissive (`boolean`): whether the spectrum is an emissive or nonemissive one.
+
+        nonemissive_illuminant (`str`): reference illuminant for non-emissive spectra.
+
+    Returns:
+        `numpy.ndarray` with last dimension u', v'
+
+    '''
+    return _spectrum_to_coordinates(spectrum_dict, XYZ_to_uvprime, emissive, nonemissive_illuminant)
+
+
+def spectrum_to_CCT_Duv(spectrum_dict, emissive=False, nonemissive_illuminant='D65'):
     ''' Computes the CCT and Duv values of a spectrum object.
 
     Args:
         spectrum_dict (`dict`): dictionary with keys wvl, values.
 
+        emissive (`boolean`): whether the spectrum is an emissive or nonemissive one.
+
+        nonemissive_illuminant (`str`): reference illuminant for non-emissive spectra.
+
     Returns:
         `tuple` containing (CCT, Duv)
 
     '''
-    XYZ = spectrum_to_XYZ_nonemissive(spectrum_dict)
+    if not emissive:
+        XYZ = spectrum_to_XYZ_nonemissive(spectrum_dict, illuminant=nonemissive_illuminant)
+    else:
+        XYZ = spectrum_to_XYZ_emissive(spectrum_dict)
+
     upvp = XYZ_to_uvprime(XYZ)
     CCT = uvprime_to_CCT(upvp)
     Duv = uvprime_to_Duv(upvp)
