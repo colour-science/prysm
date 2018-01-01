@@ -24,13 +24,13 @@ CIE_K = 24389 / 27
 CIE_E = 216 / 24389
 
 # from Ohno PDF, see D_uv function.
-CIE_DUV_k0 = -0.471106
-CIE_DUV_k1 = +1.925865
-CIE_DUV_k2 = -2.4243787
-CIE_DUV_k3 = +1.5317403
-CIE_DUV_k4 = -0.5179722
-CIE_DUV_k5 = +0.0893944
-CIE_DUV_k6 = -0.00616793
+NIST_DUV_k0 = -0.471106
+NIST_DUV_k1 = +1.925865
+NIST_DUV_k2 = -2.4243787
+NIST_DUV_k3 = +1.5317403
+NIST_DUV_k4 = -0.5179722
+NIST_DUV_k5 = +0.0893944
+NIST_DUV_k6 = -0.00616793
 
 
 # sRGB conversion matrix
@@ -1251,8 +1251,8 @@ def uvprime_to_Duv(uvprime):
         see "Calculation of CCT and Duv and Practical Conversion Formulae", Yoshi Ohno
         http://www.cormusa.org/uploads/CORM_2011_Calculation_of_CCT_and_Duv_and_Practical_Conversion_Formulae.PDF
     '''
-    k0, k1, k2, k3 = CIE_DUV_k0, CIE_DUV_k1, CIE_DUV_k2, CIE_DUV_k3
-    k4, k5, k6 = CIE_DUV_k4, CIE_DUV_k5, CIE_DUV_k6
+    k0, k1, k2, k3 = NIST_DUV_k0, NIST_DUV_k1, NIST_DUV_k2, NIST_DUV_k3
+    k4, k5, k6 = NIST_DUV_k4, NIST_DUV_k5, NIST_DUV_k6
 
     uv = np.asarray(uvprime)
     u, v = uv[..., 0], uv[..., 1] / 1.5  # inline convert v' to v
