@@ -85,6 +85,7 @@ CIE_ILLUMINANT_METADATA = {
         'D50': 1,
         'D55': 2,
         'D65': 3,
+        'D75': 4,
         'E': 1,
         'F1': 1,
         'F2': 2,
@@ -197,7 +198,7 @@ def _prepare_ciesource_spectrum(illuminant):
     ''' Retrives a CIE standard source from its csv file.
 
     Args:
-        illuminant (`str`): one of (A, B, C, D50, D55, D65, E, F1..F12, HP1..HP5)
+        illuminant (`str`): one of (A, B, C, D50, D55, D65, D75, E, F1..F12, HP1..HP5)
                                 or bb_xxxx, for "blackbody_temperature."
 
     Returns:
