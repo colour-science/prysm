@@ -32,16 +32,6 @@ NIST_DUV_k4 = -0.5179722
 NIST_DUV_k5 = +0.0893944
 NIST_DUV_k6 = -0.00616793
 
-NIST_CCT_MATRIX = np.fliplr(np.asarray([
-    [-3.7146000e-3,  -5.6061400e-2,    -3.307009e-1,      +9.750013e-1,      -1.5008606e-0,     +1.115559e-0,    -1.77348e-1],
-    [-3.2325500e-5,  +3.5700160e-4,    -1.589747e-3,      +3.6196568e-3,     -4.3534788e-3,     +2.1595434e-3,   +5.308409e-4],
-    [-2.6653835e-3,  +4.17781315e-2,   -2.73172022e-2,    +9.53570888e-1,    -1.873907584e-0,   +1.964980251e-0, -8.58308927e-1],
-    [-2.3524950e+1,  +2.7183365e+2,    -1.1785121e+3,     +2.51170136e+3,    -2.7966888e+3,     +1.49284136e+3,  -2.3275027e+2],
-    [-1.71364909e+6, +2.7482732935e+7, -1.81749963507e+8, +6.40976356945e+8, -1.27141290956e+9, +1.34488160614,  -5.926850606e+8],
-    [-9.4353083e+2,  +2.10468274e+4,   -1.9500061e+5,     +9.60532935e+5,    -2.65299138e+6,    +3.89561742e+6,  -2.3758158e+6],
-    [+5.0857956e+2,  -1.321007e+4,     1.4101538e+5,      -7.93406005e+5,    +2.48526954e+6,    -4.11436958e+6,  +2.8151771e+6],
-]))
-
 # sRGB conversion matrix
 XYZ_to_sRGB_mat_D65 = np.asarray([
     [3.2404542, -1.5371385, -0.4985314],
@@ -1348,23 +1338,6 @@ def uvprime_to_xy(uvprime):
 
     shape = x.shape
     return np.stack((x, y), axis=len(shape))
-
-
-def _kpolynomial(a, row):
-    ''' evaluates a 6th order polynomial using coefficients from a given row of the NIST CCT matrix
-
-    Args:
-        a (`numpy.ndarray`): an ndarray of angles.
-
-        row (`int`): row of the matrix to pull.
-
-    Returns:
-        `numpy.ndarray`: array of same shape as `a` that is the evaluated polynomial.
-
-    '''
-    k = NIST_CCT_MATRIX
-    return (k[row, 6] * a ** 6 + k[row, 5] * a ** 5 + k[row, 4] * a ** 4 +
-            k[row, 3] * a ** 3 + k[row, 2] * a ** 2 + k[row, 1] * a + k[row, 0])
 
 
 def _uvprime_to_Duv_triangulation(u, v, v_match, dmm1, dmp1, umm1, ump1, vmm1, vmp1, sign):
