@@ -151,11 +151,14 @@ def prepare_robertson_interpfs(values=('u', 'v'), vs='K'):
 
     '''
     data = prepare_robertson_cct_data()
-    interpfs = []
-    for value in values:
-        x, y = data[vs], data[value]
-        interpfs.append(interp1d(x, y))
-    return interpfs
+    if type(values) in (list, tuple):
+        interpfs = []
+        for value in values:
+            x, y = data[vs], data[value]
+            interpfs.append(interp1d(x, y))
+        return interpfs
+    else:
+        return interp1d(data[vs], data[values])
 
 
 def prepare_illuminant_spectrum(illuminant='D65', bb_wvl=None, bb_norm=True):
@@ -776,7 +779,7 @@ def cie_1976_plankian_locust(trange=(2000, 10000), num_points=100,
         isotemperature_lines_at = np.asarray([2000, 3000, 4000, 5000, 6500, 10000])
         u_iso = interpf_u(isotemperature_lines_at)
         v_iso = interpf_v(isotemperature_lines_at)
-        interpf_dvdu = prepare_robertson_interpfs(values='dvdu', vs='K')
+        interpf_dvdu = prepare_robertson_interpfs(values='dvdu', vs='u')
 
         dvdu = interpf_dvdu(u_iso)
         du = isotemperature_du / dvdu
@@ -891,10 +894,10 @@ def spectrum_to_XYZ_emissive(spectrum_dict, cmf='1931_2deg'):
         values = dat_interpf(wvl_cmf)
 
     dw = wvl_cmf[1] - wvl_cmf[0]
-    k = 100 / (values * cmf['Y']).sum(axis=0) / dw
-    X = k * (values * cmf['X']).sum(axis=0)
-    Y = k * (values * cmf['Y']).sum(axis=0)
-    Z = k * (values * cmf['Z']).sum(axis=0)
+    k = 100 / (values * cmf['Y']).sum() / dw
+    X = k * (values * cmf['X']).sum()
+    Y = k * (values * cmf['Y']).sum()
+    Z = k * (values * cmf['Z']).sum()
     return X, Y, Z
 
 
@@ -1578,7 +1581,7 @@ def XYZ_to_sRGB(XYZ, illuminant='D65', gamma_encode=True):
         return XYZ_to_RGB(XYZ, invmat)
 
 
-def XYZ_to_RGB(XYZ, conversion_matrix, XYZ_scale=100):
+def XYZ_to_RGB(XYZ, conversion_matrix, XYZ_scale=20):
     ''' Converts xyz points to xy points.
 
     Args:
