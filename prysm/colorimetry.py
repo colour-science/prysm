@@ -772,12 +772,9 @@ def cie_1976_plankian_locust(trange=(2000, 10000), num_points=100,
             `matplotlib.axes.Axis`: axis containing the plot.
 
     '''
-    cct = prepare_robertson_cct_data()
-    cct_K, cct_u, cct_v, cct_dvdu = cct['K'], cct['u'], cct['v'], cct['dvdu']
     # compute the u', v' coordinates of the temperatures
     temps = np.linspace(trange[0], trange[1], num_points)
-    interpf_u = interp1d(cct_K, cct_u)
-    interpf_v = interp1d(cct_K, cct_v)
+    interpf_u, interpf_v = prepare_robertson_interpfs(values=('u', 'v'), vs='K')
     u = interpf_u(temps)
     v = interpf_v(temps) * 1.5  # x1.5 converts 1960 uv to 1976 u' v'
 
@@ -788,7 +785,7 @@ def cie_1976_plankian_locust(trange=(2000, 10000), num_points=100,
         isotemperature_lines_at = np.asarray([2000, 3000, 4000, 5000, 6500, 10000])
         u_iso = interpf_u(isotemperature_lines_at)
         v_iso = interpf_v(isotemperature_lines_at)
-        interpf_dvdu = interp1d(cct_u, cct_dvdu)
+        interpf_dvdu = prepare_robertson_interpfs(values='dvdu', vs='K')
 
         dvdu = interpf_dvdu(u_iso)
         du = isotemperature_du / dvdu
@@ -1072,7 +1069,7 @@ def wavelength_to_XYZ(wavelength, observer='1931_2deg'):
     Args:
         wavelength (`float`): wavelength in nm.
 
-        observer (`str`): CIE observer name, must be 1931_2deg.
+        observer (`str`): CIE observer name, must be 1931_2deg or 1964_10deg.
 
     Returns:
         `numpy.ndarray`: array with last dimension corresponding to X, Y, Z.
