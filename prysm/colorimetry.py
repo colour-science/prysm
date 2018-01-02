@@ -17,7 +17,7 @@ from matplotlib.collections import LineCollection
 
 from prysm.conf import config
 from prysm.util import share_fig_ax, colorline, smooth
-from prysm.mathops import atan, atan2, pi, cos, sin, exp, log, sqrt, arccos, jit
+from prysm.mathops import atan, atan2, pi, cos, sin, exp, log, sqrt, jit
 
 # some CIE constants
 CIE_K = 24389 / 27
@@ -32,15 +32,15 @@ NIST_DUV_k4 = -0.5179722
 NIST_DUV_k5 = +0.0893944
 NIST_DUV_k6 = -0.00616793
 
-NIST_CCT_MATRIX = np.asarray([
+NIST_CCT_MATRIX = np.fliplr(np.asarray([
     [-3.7146000e-3,  -5.6061400e-2,    -3.307009e-1,      +9.750013e-1,      -1.5008606e-0,     +1.115559e-0,    -1.77348e-1],
     [-3.2325500e-5,  +3.5700160e-4,    -1.589747e-3,      +3.6196568e-3,     -4.3534788e-3,     +2.1595434e-3,   +5.308409e-4],
     [-2.6653835e-3,  +4.17781315e-2,   -2.73172022e-2,    +9.53570888e-1,    -1.873907584e-0,   +1.964980251e-0, -8.58308927e-1],
     [-2.3524950e+1,  +2.7183365e+2,    -1.1785121e+3,     +2.51170136e+3,    -2.7966888e+3,     +1.49284136e+3,  -2.3275027e+2],
     [-1.71364909e+6, +2.7482732935e+7, -1.81749963507e+8, +6.40976356945e+8, -1.27141290956e+9, +1.34488160614,  -5.926850606e+8],
     [-9.4353083e+2,  +2.10468274e+4,   -1.9500061e+5,     +9.60532935e+5,    -2.65299138e+6,    +3.89561742e+6,  -2.3758158e+6],
-    [+5.0857956e+2,  -1.321007e+4,     1.4101538e+5,      -7.93406005e+5,    +2.48526954e+6,    -4.11436958e+6,  +2.8151771e+6]
-])
+    [+5.0857956e+2,  -1.321007e+4,     1.4101538e+5,      -7.93406005e+5,    +2.48526954e+6,    -4.11436958e+6,  +2.8151771e+6],
+]))
 
 # sRGB conversion matrix
 XYZ_to_sRGB_mat_D65 = np.asarray([
@@ -1040,9 +1040,8 @@ def spectrum_to_CCT_Duv(spectrum_dict, emissive=False, nonemissive_illuminant='D
         XYZ = spectrum_to_XYZ_emissive(spectrum_dict)
 
     upvp = XYZ_to_uvprime(XYZ)
-    CCT = uvprime_to_CCT(upvp)
-    Duv = uvprime_to_Duv(upvp)
-    return CCT, Duv
+    cctduv = uvprime_to_CCT_Duv(upvp)
+    return cctduv
 
 
 def wavelength_to_XYZ(wavelength, observer='1931_2deg'):
@@ -1309,20 +1308,6 @@ def xy_to_CCT(xy):
     return 449 * n ** 3 + 3525 * n ** 2 + 6823.3 * n + 5520.3
 
 
-def xy_to_Duv(xy):
-    ''' Computes the delta uv value for an x, y chromaticity coordinate pair.
-
-    Args:
-        xy (`iterable`): x, y chromaticity coordinates.
-
-    Returns:
-        `float`: Duv.
-
-    '''
-    uvp = xy_to_uvprime(xy)
-    return uvprime_to_Duv(uvp)
-
-
 def uvprime_to_xy(uvprime):
     ''' Converts u' v' points to xyY x,y points.
 
@@ -1347,7 +1332,24 @@ def uvprime_to_xy(uvprime):
     return np.stack((x, y), axis=len(shape))
 
 
-def uvprime_to_CCT_DUV(uvprime):
+def _kpolynomial(a, row):
+    ''' evaluates a 6th order polynomial using coefficients from a given row of the NIST CCT matrix
+
+    Args:
+        a (`numpy.ndarray`): an ndarray of angles.
+
+        row (`int`): row of the matrix to pull.
+
+    Returns:
+        `numpy.ndarray`: array of same shape as `a` that is the evaluated polynomial.
+
+    '''
+    k = NIST_CCT_MATRIX
+    return (k[row, 6] * a ** 6 + k[row, 5] * a ** 5 + k[row, 4] * a ** 4 +
+            k[row, 3] * a ** 3 + k[row, 2] * a ** 2 + k[row, 1] * a + k[row, 0])
+
+
+def uvprime_to_CCT_Duv(uvprime):
     ''' Computes CCT from u'v' coordinates.
 
     Args:
@@ -1365,16 +1367,13 @@ def uvprime_to_CCT_DUV(uvprime):
     u, v = uvp[..., 0], uvp[..., 1] / 1.5  # inline conversion from v' -> v
     L_FP = sqrt((u - 0.292) ** 2 + (v - 0.24) ** 2)
     a1 = atan((v - 0.24) / (u - 0.292))
-    k = NIST_CCT_MATRIX
 
     if a1 >= 0:
         a = a1
     else:
         a = a1 + pi
 
-    L_BB = (k[0, 6] * a ** 6 + k[0, 5] * a ** 5 + k[0, 4] * a ** 4 +
-            k[0, 3] * a ** 3 + k[0, 2] * a ** 2 + k[0, 1] * a + k[0, 0])
-
+    L_BB = _kpolynomial(a, 0)
     Duv = L_FP - L_BB
 
     if a < 2.54:
@@ -1382,11 +1381,10 @@ def uvprime_to_CCT_DUV(uvprime):
     else:
         row1, row2 = 2, 4
 
-    T1 = (k[row1, 6] * a ** 6 + k[row1, 5] * a ** 5 + k[row1, 4] * a ** 4 +
-          k[row1, 3] * a ** 3 + k[row1, 2] * a ** 2 + k[row1, 1] * a + k[row1, 0])
-    Dtc1 = ((k[row2, 6] * a ** 6 + k[row2, 5] * a ** 5 + k[row2, 4] * a ** 4 +
-             k[row2, 3] * a ** row2 + k[row2, 2] * a ** 2 + k[row2, 1] * a + k[row2, 0]) *
-            (L_BB + 0.01) / L_FP * Duv / 0.01)
+    T1 = _kpolynomial(a, row1)
+    Dtc1 = _kpolynomial(a, row2) * (L_BB + 0.01) / L_FP * Duv / 0.01
+    if a >= 2.54:
+        Dtc1 = 1 / Dtc1
 
     T2 = T1 - Dtc1
     c = log(T2)
@@ -1396,8 +1394,7 @@ def uvprime_to_CCT_DUV(uvprime):
     else:
         row3 = 6
 
-    Dtc2 = (k[row3, 6] * c ** 6 + k[row3, 5] * c ** row3 + k[row3, 4] * c ** 4 +
-            k[row3, 3] * c ** 3 + k[row3, 2] * c ** 2 + k[row3, 1] * c + k[row3, 0])
+    Dtc2 = _kpolynomial(c, row3)
 
     if Duv < 0:
         Dtc2 *= abs(Duv / 0.03) ** 2
