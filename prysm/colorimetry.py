@@ -17,7 +17,7 @@ from matplotlib.collections import LineCollection
 
 from prysm.conf import config
 from prysm.util import share_fig_ax, colorline, smooth
-from prysm.mathops import atan, atan2, pi, cos, sin, exp, log, sqrt, jit
+from prysm.mathops import atan2, pi, cos, sin, exp, sqrt, jit
 
 # some CIE constants
 CIE_K = 24389 / 27
@@ -144,6 +144,27 @@ def prepare_robertson_cct_data():
         'v': v,
         'dvdu': dvdu
     }
+
+
+@lru_cache()
+def prepare_robertson_interpfs(values=('u', 'v'), vs='K'):
+    ''' Prepares interpolation functions for robertson CCT data.
+
+    Args:
+        values (`tuple` of `strs`): which values to interpolate; defaults to u and v.
+
+        vs (`str`): what to interpolate against; defaults to CCT.
+
+    Returns:
+        `list`: each element is a scipy.interpolate.interp1d callable for the corresponding value.
+
+    '''
+    data = prepare_robertson_cct_data()
+    interpfs = []
+    for value in values:
+        x, y = data[vs], data[value]
+        interpfs.append(interp1d(x, y))
+    return interpfs
 
 
 def prepare_illuminant_spectrum(illuminant='D65', bb_wvl=None, bb_norm=True):
@@ -1349,11 +1370,83 @@ def _kpolynomial(a, row):
             k[row, 3] * a ** 3 + k[row, 2] * a ** 2 + k[row, 1] * a + k[row, 0])
 
 
-def uvprime_to_CCT_Duv(uvprime):
-    ''' Computes CCT from u'v' coordinates.
+def _uvprime_to_Duv_triangulation(u, v, v_match, dmm1, dmp1, umm1, ump1, vmm1, vmp1, sign):
+    ''' Ohno 2011 triangulation technique to compute Duv from a CIE 1960 u, v coordinate.
 
     Args:
-        uv (`numpy.ndarray`): array with last dimensions corresponding to u, v
+        u (`numpy.ndarray`): array of u values.
+
+        v (`numpy.ndarray`): array of v values.
+
+        v_match (`numpy.ndarray`): array of v values for the closest match in the interpolated
+            robertson 1961 data.
+
+        dmm1 (`numpy.ndarray`): "d sub m minus one" - distance for the m-1th CCT.
+
+        dmp1 (`numpy.ndarray`): "d sub m plus one" - distance for the m+1th CCT.
+
+        umm1 (`numpy.ndarray`): "u sub m minus one" - u coordinate for the m-1th CCT.
+
+        ump1 (`numpy.ndarray`): "u sub m plus one" - u coordinate for the m+1th CCT.
+
+        vmm1 (`numpy.ndarray`): "v sub m minus one" - v coordinate for the m-1th CCT.
+
+        vmp1 (`numpy.ndarray`): "v sub m plus one" - v coordinate for the m+1th CCT.
+
+        sign (`int`): either -1 or 1, indicates the sign of the Duv value.
+
+    Returns:
+        `numpy.ndarray` of Duv values.
+
+    '''
+    ell = np.hypot(umm1 - ump1, vmm1 - vmp1)
+    x = (dmm1 ** 2 - dmp1 ** 2 + ell ** 2) / (2 * ell)
+    Duv = sign * sqrt(dmm1 ** 2 - x ** 2)
+    return Duv
+
+
+def _uvprime_to_CCT_Duv_parabolic(tmm1, tm, tmp1, dmm1, dm, dmp1, sign):
+    ''' Ohno 2011 parabolic technique for computing CCT.
+
+    Args:
+        tmmp (`numpy.ndarray`): "T sub m minus one", the m-1th CCT value.
+
+        tm (`numpy.ndarray`): "T sub m", the mth CCT value.
+
+        tmpp (`numpy.ndarray`): "T sub m plus one", the m+1th CCT value.
+
+        dmmp (`numpy.ndarray`): "d sub m minus one", the m-1th distance value.
+
+        dm (`numpy.ndarray`): "d sub m", the mth distance value.
+
+        dmpp (`numpy.ndarray`): "d sub m plus one", the m+1th distance value.
+
+        sign (`int`): either -1 or 1, indicating the sign of the solution.
+
+    Returns:
+        `tuple` containing CCT, Duv values.
+
+    '''
+    x = (tmm1 - tm) * (tmp1 - tmm1) * (tm - tmp1)
+    a = (tmp1 * (dmm1 - dm) + tm * (dmp1 - dmm1) + tmm1 * (dm - dmp1)) * x ** -1
+    b = (-(tmp1 ** 2 * (dmm1 - dm) + tm ** 2 * (dmp1 - dmm1) + tmm1 ** 2 *
+           (dm - dmp1)) * x ** -1)
+    c = (-(dmp1 * (tmm1 - tm) * tm * tmm1 + dm *
+           (tmp1 - tmm1) * tmp1 * tmm1 + dmm1 *
+           (tm - tmp1) * tmp1 * tm) * x ** -1)
+
+    CCT = -b / (2 * a)
+    Duv = sign * (a * CCT ** 2 + b * CCT + c)
+    return CCT, Duv
+
+
+def uvprime_to_CCT_Duv(uvprime, interp_samples=10000):
+    ''' Computes Duv from u'v' coordinates.
+
+    Args:
+        uv (`numpy.ndarray`): array with last dimensions corresponding to u, v.
+
+        interp_samples (`int`): number of samples to use in interpolation.
 
     Returns:
         `float`: CCT.
@@ -1365,41 +1458,37 @@ def uvprime_to_CCT_Duv(uvprime):
     '''
     uvp = np.asarray(uvprime)
     u, v = uvp[..., 0], uvp[..., 1] / 1.5  # inline conversion from v' -> v
-    L_FP = sqrt((u - 0.292) ** 2 + (v - 0.24) ** 2)
-    a1 = atan((v - 0.24) / (u - 0.292))
 
-    if a1 >= 0:
-        a = a1
+    # get interpolators for robertson's CCT data
+    interp_u, interp_v = prepare_robertson_interpfs(values=('u', 'v'), vs='K')
+
+    # now produce arrays of u, v coordinates with fine sampling on a log scale
+    sample_K = np.logspace(3.225, 4.25, num=interp_samples, base=10)
+    u_i, v_i = interp_u(sample_K), interp_v(sample_K)
+    distance = sqrt((u_i - u) ** 2 + (v_i - v) ** 2)
+    closest = np.argmin(distance)
+    CCT = sample_K[closest]
+
+    dmm1 = distance[closest - 1]
+    dmp1 = distance[closest + 1]
+
+    umm1 = u_i[closest - 1]
+    ump1 = u_i[closest + 1]
+    vmm1 = v_i[closest - 1]
+    vmp1 = v_i[closest + 1]
+    vm = v_i[closest]
+    if vm <= v:
+        sign = 1
     else:
-        a = a1 + pi
+        sign = -1
 
-    L_BB = _kpolynomial(a, 0)
-    Duv = L_FP - L_BB
+    Duv = _uvprime_to_Duv_triangulation(u, v, vm, dmm1, dmp1, umm1, ump1, vmm1, vmp1, sign)
 
-    if a < 2.54:
-        row1, row2 = 1, 3
-    else:
-        row1, row2 = 2, 4
-
-    T1 = _kpolynomial(a, row1)
-    Dtc1 = _kpolynomial(a, row2) * (L_BB + 0.01) / L_FP * Duv / 0.01
-    if a >= 2.54:
-        Dtc1 = 1 / Dtc1
-
-    T2 = T1 - Dtc1
-    c = log(T2)
-
-    if Duv >= 0:
-        row3 = 5
-    else:
-        row3 = 6
-
-    Dtc2 = _kpolynomial(c, row3)
-
-    if Duv < 0:
-        Dtc2 *= abs(Duv / 0.03) ** 2
-
-    CCT = T2 - Dtc2
+    if abs(Duv) < 0.002:
+        tmm1 = sample_K[closest - 1]
+        tmp1 = sample_K[closest + 1]
+        dm = distance[closest]
+        CCT, Duv = _uvprime_to_CCT_Duv_parabolic(tmm1, CCT, tmp1, dmm1, dm, dmp1, sign)
     return CCT, Duv
 
 
