@@ -4,6 +4,7 @@ import numpy as np
 
 from prysm.mathops import (floor, exp, sqrt)
 
+
 def pad2d(array, factor=1, value=0):
     ''' Symmetrically pads a 2D array with a value.
 
