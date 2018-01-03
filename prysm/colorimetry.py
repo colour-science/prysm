@@ -1284,23 +1284,21 @@ def xy_to_uvprime(xy):
     u = 4 * x / (-2 * x + 12 * y + 3)
     v = 6 * y / (-2 * x + 12 * y + 3) * 1.5  # inline conversion from v -> v'
     shape = xy.shape
-    return np.stack((u, v), axis=len(shape))
+    return np.stack((u, v), axis=len(shape) - 1)
 
 
-def xy_to_CCT(xy):
-    ''' Computes the correlated color temperature given x,y chromaticity coordinates.
+def xy_to_CCT_Duv(xy):
+    ''' Computes the correlated color temperature and Delta uv given x,y chromaticity coordinates.
 
     Args:
         xy (`iterable`): x, y chromaticity coordinates.
 
     Returns:
-        `float`: CCT.
+        `tuple` with CCT, Duv values.
 
     '''
-    xy = np.asarray(xy)
-    x, y = xy[..., 0], xy[..., 1]
-    n = (x - 0.3320) / (0.1858 - y)
-    return 449 * n ** 3 + 3525 * n ** 2 + 6823.3 * n + 5520.3
+    upvp = xy_to_uvprime(xy)
+    return uvprime_to_CCT_Duv(upvp)
 
 
 def uvprime_to_xy(uvprime):
@@ -1327,7 +1325,7 @@ def uvprime_to_xy(uvprime):
     return np.stack((x, y), axis=len(shape))
 
 
-def _uvprime_to_Duv_triangulation(u, v, v_match, dmm1, dmp1, umm1, ump1, vmm1, vmp1, sign):
+def _uvprime_to_CCT_Duv_triangulation(u, v, dmm1, dmp1, umm1, ump1, vmm1, vm, vmp1, tmm1, tmp1, sign):
     ''' Ohno 2011 triangulation technique to compute Duv from a CIE 1960 u, v coordinate.
 
     Args:
@@ -1335,8 +1333,6 @@ def _uvprime_to_Duv_triangulation(u, v, v_match, dmm1, dmp1, umm1, ump1, vmm1, v
 
         v (`numpy.ndarray`): array of v values.
 
-        v_match (`numpy.ndarray`): array of v values for the closest match in the interpolated
-            robertson 1961 data.
 
         dmm1 (`numpy.ndarray`): "d sub m minus one" - distance for the m-1th CCT.
 
@@ -1348,7 +1344,14 @@ def _uvprime_to_Duv_triangulation(u, v, v_match, dmm1, dmp1, umm1, ump1, vmm1, v
 
         vmm1 (`numpy.ndarray`): "v sub m minus one" - v coordinate for the m-1th CCT.
 
+        vm (`numpy.ndarray`): array of v values for the closest match in the interpolated
+                              robertson 1961 data.
+
         vmp1 (`numpy.ndarray`): "v sub m plus one" - v coordinate for the m+1th CCT.
+
+        tmm1 (`numpy.ndarray`): "t sub m minus one" - the m-1th CCT.
+
+        tmp1 (`numpy.ndarray`): "t sub m plus one" - the m-1th CCT.
 
         sign (`int`): either -1 or 1, indicates the sign of the Duv value.
 
@@ -1358,8 +1361,9 @@ def _uvprime_to_Duv_triangulation(u, v, v_match, dmm1, dmp1, umm1, ump1, vmm1, v
     '''
     ell = np.hypot(umm1 - ump1, vmm1 - vmp1)
     x = (dmm1 ** 2 - dmp1 ** 2 + ell ** 2) / (2 * ell)
+    CCT = tmp1 + (tmp1 - tmp1) * (x / ell)
     Duv = sign * sqrt(dmm1 ** 2 - x ** 2)
-    return Duv
+    return CCT, Duv
 
 
 def _uvprime_to_CCT_Duv_parabolic(tmm1, tm, tmp1, dmm1, dm, dmp1, sign):
@@ -1424,10 +1428,13 @@ def uvprime_to_CCT_Duv(uvprime, interp_samples=10000):
     u_i, v_i = interp_u(sample_K), interp_v(sample_K)
     distance = sqrt((u_i - u) ** 2 + (v_i - v) ** 2)
     closest = np.argmin(distance)
-    CCT = sample_K[closest]
+
+    tmm1 = sample_K[closest - 1]
+    tmp1 = sample_K[closest + 1]
 
     dmm1 = distance[closest - 1]
     dmp1 = distance[closest + 1]
+    dm = distance[closest]
 
     umm1 = u_i[closest - 1]
     ump1 = u_i[closest + 1]
@@ -1439,12 +1446,9 @@ def uvprime_to_CCT_Duv(uvprime, interp_samples=10000):
     else:
         sign = -1
 
-    Duv = _uvprime_to_Duv_triangulation(u, v, vm, dmm1, dmp1, umm1, ump1, vmm1, vmp1, sign)
+    CCT, Duv = _uvprime_to_CCT_Duv_triangulation(u, v, dmm1, dmp1, umm1, ump1, vmm1, vm, vmp1, tmm1, tmp1, sign)
 
     if abs(Duv) < 0.002:
-        tmm1 = sample_K[closest - 1]
-        tmp1 = sample_K[closest + 1]
-        dm = distance[closest]
         CCT, Duv = _uvprime_to_CCT_Duv_parabolic(tmm1, CCT, tmp1, dmm1, dm, dmp1, sign)
     return CCT, Duv
 
