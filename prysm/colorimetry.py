@@ -1,6 +1,12 @@
-''' optional tools for colorimetry, wrapping the color-science library, see:
-    http://colour-science.org/
-'''
+"""
+Portions of this module are based on Colour 0.3.10 and provided under the
+New BSD License.
+
+Mansencal, T., Mauderer, M., Parsons, M., Canavan, L., Cooper, S., Shaw, N.,
+Wheatley, K., Crowson, K. (2017, July). Colour 0.3.10.
+doi:10.5281/zenodo.821825
+"""
+
 import csv
 from functools import lru_cache
 from pathlib import Path
