@@ -21,6 +21,7 @@ from numpy import (
     sinc,
     exp,
     log,
+    log10,
     arccos,
     arcsin,
 )
@@ -69,6 +70,7 @@ assert tan
 assert sinc
 assert exp
 assert log
+assert log10
 assert arccos
 assert arcsin
 assert arctan
